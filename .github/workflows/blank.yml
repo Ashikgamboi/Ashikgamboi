@@ -1,0 +1,100 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # Runs a single command using the runners shell
+      - name: Run a one-line script
+        run: echo Hello, world!
+
+      # Runs a set of commands using the runners shell
+      - name: Run a multi-line script
+        run: |
+          echo Add other actions to build,
+          echo test, and deploy your project.
+import streamlit as st
+import pandas as pd
+from CryptoPredictor import CryptoPredictor
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+
+st.title("Cryptocurrency Price Prediction")
+
+st.sidebar.header("User Input")
+coin_id = st.sidebar.text_input("Enter Cryptocurrency (e.g., bitcoin, ethereum)", "bitcoin")
+days = st.sidebar.number_input("Enter number of days for prediction", min_value=1, value=365)
+
+predictor = CryptoPredictor(coin_id=coin_id, days=str(days))
+
+st.sidebar.text("Fetching data...")
+predictor.fetch_price_data_coingecko()
+predictor.fetch_network_activity_data()
+
+st.subheader(f"Data for {coin_id.capitalize()} over the last {days} days")
+st.write(predictor.data.head())
+
+predictor.add_technical_indicators()
+
+st.subheader("Technical Indicators")
+st.write(predictor.data[["macd", "macd_signal", "rsi", "sma", "volume_sma"]].tail())
+
+if st.sidebar.button("Train Models"):
+    st.text("Training models... This may take some time.")
+    model = predictor.train_models()
+
+    st.subheader("Model Performance")
+    st.write("Linear Regression MSE: ", mean_squared_error(predictor.y_test, model[0]))
+    st.write("Random Forest MSE: ", mean_squared_error(predictor.y_test, model[1]))
+
+    st.subheader("Predictions vs Actual Prices")
+
+    st.text("Plotting LSTM predictions...")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(predictor.y_test, label="Actual Price", color="blue")
+    ax.plot(model[2].predict(predictor.X_test), label="LSTM Predicted", color="orange")
+    ax.legend()
+    st.pyplot(fig)
+
+    st.text("Plotting Random Forest predictions...")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(predictor.y_test, label="Actual Price", color="blue")
+    ax.plot(model[3].predict(predictor.X_test), label="RF Predicted", color="green")
+    ax.legend()
+    st.pyplot(fig)
+
+    st.subheader("ARIMA Model Forecasting")
+    arima_model = predictor.train_arima_model()
+    forecast = arima_model.forecast(steps=30)  # Forecasting the next 30 days
+    st.write("ARIMA Forecast for the next 30 days:")
+    st.write(forecast)
+
+    st.text("Plotting ARIMA forecast...")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(predictor.data['price'], label="Historical Price", color="blue")
+    ax.plot(pd.date_range(predictor.data.index[-1], periods=30, freq="D"), forecast, label="Forecast", color="red")
+    ax.legend()
+    st.pyplot(fig)
+
+st.sidebar.text("Data fetched from CoinGecko, Glassnode, and Alpha Vantage APIs")
